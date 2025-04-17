@@ -6,7 +6,7 @@ const initialData = [
   { name: 'Shoeb', nationality: 'Afghanistan', favoriteClub: 'Barcelona', clWins: 3 },
   { name: 'Khalid', nationality: 'Etiopien', favoriteClub: 'Barcelona', clWins: 15 },
   { name: 'Khosro', nationality: 'Iran', favoriteClub: 'Barcelona', clWins: 6 },
-  { name: 'Tarek Sr', nationality: 'Libanon', favoriteClub: 'Juventus', clWins: 2 },
+  { name: 'Tarek SR', nationality: 'Libanon', favoriteClub: 'Juventus', clWins: 2 },
 ];
 
 mongoose.connect(process.env.MONGO_URI)
