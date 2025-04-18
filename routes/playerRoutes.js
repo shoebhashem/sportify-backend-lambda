@@ -10,16 +10,20 @@ router.get('/', async (req, res) => {
 
 // POST a new player
 router.post('/', async (req, res) => {
-  const { name, nationality, favoriteClub, clWins } = req.body;
-  const player = new Player({ name, nationality, favoriteClub, clWins });
+  const { name, nationality, favoriteClub, clWins, ulWins } = req.body;
+  const player = new Player({ name, nationality, favoriteClub, clWins, ulWins });
   await player.save();
   res.status(201).json(player);
 });
 
 // PATCH update CL wins
 router.patch('/:id', async (req, res) => {
-  const { clWins } = req.body;
-  const updated = await Player.findByIdAndUpdate(req.params.id, { clWins }, { new: true });
+  const { clWins, ulWins } = req.body;
+  const updated = await Player.findByIdAndUpdate(
+    req.params.id,
+    { clWins, ulWins },
+    { new: true }
+  );
   res.json(updated);
 });
 
