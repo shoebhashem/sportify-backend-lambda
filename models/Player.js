@@ -4,7 +4,10 @@ const playerSchema = new mongoose.Schema({
   name: { type: String, required: true },
   nationality: { type: String, required: true },
   favoriteClub: { type: String },
-  clWins: { type: Number, default: 0 }
+  clWins: { type: Number, default: 0 },
+  ulWins: { type: Number, default: 0 }
+}, {
+  timestamps: true // ✅ Adds createdAt and updatedAt automatically
 });
 
 module.exports = mongoose.model('Player', playerSchema);
