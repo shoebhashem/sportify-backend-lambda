@@ -34,13 +34,12 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH update CL or UL wins
+// PATCH update any player fields
 router.patch('/:id', async (req, res) => {
-  const { clWins, ulWins } = req.body;
   try {
     const updated = await Player.findByIdAndUpdate(
       req.params.id,
-      { ...(clWins !== undefined && { clWins }), ...(ulWins !== undefined && { ulWins }) },
+      { $set: req.body },
       { new: true }
     );
     res.json(updated);
