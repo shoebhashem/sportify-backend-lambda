@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const Player = require('../models/Player');
 
+// GET all players
+router.get('/', async (req, res) => {
+  try {
+    const players = await Player.find();
+    res.json(players);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch players' });
+  }
+});
+
 // GET all players sorted by CL wins
 router.get('/cl', async (req, res) => {
   try {
