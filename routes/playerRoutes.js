@@ -44,6 +44,19 @@ router.post('/', async (req, res) => {
   }
 });
 
+// DELETE a player by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const player = await Player.findByIdAndDelete(req.params.id);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    res.json({ message: 'Player deleted successfully', player });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete player' });
+  }
+});
+
 // PATCH update any player fields
 router.patch('/:id', async (req, res) => {
   try {
