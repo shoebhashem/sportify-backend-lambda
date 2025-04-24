@@ -8,7 +8,7 @@ const port = process.env.PORT || 4000;
 
 // Define allowed origins based on environment
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://ec2.publicvm.com', 'https://your-netlify-app.netlify.app']
+  ? ['https://ec2.publicvm.com', 'https://gbgfotboll.netlify.app']
   : ['http://localhost:5173']; // Replace with your local frontend URL
 
 // Configure CORS
@@ -30,6 +30,7 @@ app.use(express.json());
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
+  
 
 const playerRoutes = require('./routes/playerRoutes');
 app.use('/api/players', playerRoutes);
