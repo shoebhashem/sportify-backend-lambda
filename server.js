@@ -9,7 +9,7 @@ const port = process.env.PORT || 4000;
 // Define allowed origins based on environment
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? ['https://ec2.publicvm.com', 'https://your-netlify-app.netlify.app']
-  : ['http://localhost:3000']; // Replace with your local frontend URL
+  : ['http://localhost:5173']; // Replace with your local frontend URL
 
 // Configure CORS
 const corsOptions = {
