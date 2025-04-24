@@ -6,7 +6,25 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.use(cors());
+// Define allowed origins based on environment
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? ['https://ec2.publicvm.com', 'https://your-netlify-app.netlify.app']
+  : ['http://localhost:3000']; // Replace with your local frontend URL
+
+// Configure CORS
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI)
