@@ -1,28 +1,25 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Define allowed origins based on environment
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? ['https://ec2.publicvm.com', 'https://gbgfotboll.netlify.app']
-  : ['http://localhost:5173']; // Replace with your local frontend URL
+const allowedOrigins = [
+  'https://gbgfotboll.netlify.app',
+  'http://localhost:5173',
+  'https://www.gbgfotboll.netlify.app' // just in case Netlify routes through www
+];
 
-// ✅ Updated CORS options with logging and fallback handling
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log("🌐 Incoming Origin:", origin);
+    console.log('🌐 Incoming Origin:', origin);
 
-    // Allow requests with no origin (like curl or same-origin requests)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn("🚫 Blocked by CORS:", origin);
+      console.warn('🚫 Blocked by CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -32,6 +29,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
 
 // MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
