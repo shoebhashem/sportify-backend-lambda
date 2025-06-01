@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 5000;
 
 const allowedOrigins = [
   'https://gbgfotboll.netlify.app',
@@ -40,7 +39,13 @@ mongoose.connect(process.env.MONGO_URI)
 const playerRoutes = require('./routes/playerRoutes');
 app.use('/api/players', playerRoutes);
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
-});
+// Export the app for Lambda (remove app.listen for Lambda)
+module.exports = app;
+
+// For local development, you can still run the server
+if (require.main === module) {
+  const port = process.env.PORT || 5000;
+  app.listen(port, () => {
+    console.log(`🚀 Server running on port ${port}`);
+  });
+}
