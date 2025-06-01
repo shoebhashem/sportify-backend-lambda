@@ -1,0 +1,159 @@
+name: Deploy to AWS Lambda
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Create deployment package
+      run: |
+        # Remove any existing zip file
+        rm -f deployment-package.zip
+        
+        # Create deployment package excluding unnecessary files
+        zip -r deployment-package.zip . \
+          -x "*.git*" \
+          -x "node_modules/.cache/*" \
+          -x "*.zip" \
+          -x ".github/*" \
+          -x "README.md" \
+          -x ".DS_Store"
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+        
+    - name: Create Lambda function (if it doesn't exist)
+      run: |
+        # Check if Lambda function exists
+        if ! aws lambda get-function --function-name sportify-backend-lambda 2>/dev/null; then
+          echo "Creating new Lambda function..."
+          aws lambda create-function \
+            --function-name sportify-backend-lambda \
+            --runtime nodejs18.x \
+            --role ${{ secrets.AWS_LAMBDA_ROLE_ARN }} \
+            --handler lambda.handler \
+            --zip-file fileb://deployment-package.zip \
+            --timeout 30 \
+            --memory-size 512 \
+            --environment Variables="{MONGO_URI=${{ secrets.MONGO_URI }}}" \
+            --description "Sportify Backend API - Express.js app running on Lambda"
+        else
+          echo "Lambda function already exists, will update code..."
+        fi
+        
+    - name: Update Lambda function code
+      run: |
+        aws lambda update-function-code \
+          --function-name sportify-backend-lambda \
+          --zip-file fileb://deployment-package.zip
+          
+    - name: Update Lambda function configuration
+      run: |
+        aws lambda update-function-configuration \
+          --function-name sportify-backend-lambda \
+          --environment Variables="{MONGO_URI=${{ secrets.MONGO_URI }}}" \
+          --timeout 30 \
+          --memory-size 512
+          
+    - name: Create or update API Gateway (if needed)
+      run: |
+        # Check if API Gateway exists
+        API_ID=$(aws apigateway get-rest-apis --query "items[?name=='sportify-backend-api'].id" --output text)
+        
+        if [ "$API_ID" == "None" ] || [ -z "$API_ID" ]; then
+          echo "Creating new API Gateway..."
+          API_ID=$(aws apigateway create-rest-api \
+            --name sportify-backend-api \
+            --description "API Gateway for Sportify Backend Lambda" \
+            --endpoint-configuration types=REGIONAL \
+            --query 'id' --output text)
+          echo "Created API Gateway with ID: $API_ID"
+          
+          # Get the root resource ID
+          ROOT_ID=$(aws apigateway get-resources \
+            --rest-api-id $API_ID \
+            --query 'items[?path==`/`].id' --output text)
+          
+          # Create proxy resource
+          RESOURCE_ID=$(aws apigateway create-resource \
+            --rest-api-id $API_ID \
+            --parent-id $ROOT_ID \
+            --path-part "{proxy+}" \
+            --query 'id' --output text)
+          
+          # Create ANY method for proxy
+          aws apigateway put-method \
+            --rest-api-id $API_ID \
+            --resource-id $RESOURCE_ID \
+            --http-method ANY \
+            --authorization-type NONE
+          
+          # Set up Lambda integration
+          LAMBDA_ARN="arn:aws:lambda:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:function:sportify-backend-lambda"
+          
+          aws apigateway put-integration \
+            --rest-api-id $API_ID \
+            --resource-id $RESOURCE_ID \
+            --http-method ANY \
+            --type AWS_PROXY \
+            --integration-http-method POST \
+            --uri "arn:aws:apigateway:${{ secrets.AWS_REGION }}:lambda:path/2015-03-31/functions/$LAMBDA_ARN/invocations"
+          
+          # Grant API Gateway permission to invoke Lambda
+          aws lambda add-permission \
+            --function-name sportify-backend-lambda \
+            --statement-id apigateway-invoke \
+            --action lambda:InvokeFunction \
+            --principal apigateway.amazonaws.com \
+            --source-arn "arn:aws:execute-api:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:$API_ID/*/*/*" || true
+          
+          # Deploy the API
+          aws apigateway create-deployment \
+            --rest-api-id $API_ID \
+            --stage-name prod
+          
+          echo "API Gateway URL: https://$API_ID.execute-api.${{ secrets.AWS_REGION }}.amazonaws.com/prod"
+        else
+          echo "API Gateway already exists with ID: $API_ID"
+          # Just redeploy to update
+          aws apigateway create-deployment \
+            --rest-api-id $API_ID \
+            --stage-name prod
+          echo "API Gateway URL: https://$API_ID.execute-api.${{ secrets.AWS_REGION }}.amazonaws.com/prod"
+        fi
+        
+    - name: Output deployment info
+      run: |
+        echo "✅ Deployment completed successfully!"
+        echo "Lambda Function: sportify-backend-lambda"
+        echo "Region: ${{ secrets.AWS_REGION }}"
+        
+        # Get API Gateway URL
+        API_ID=$(aws apigateway get-rest-apis --query "items[?name=='sportify-backend-api'].id" --output text)
+        if [ "$API_ID" != "None" ] && [ ! -z "$API_ID" ]; then
+          echo "🌐 API Endpoint: https://$API_ID.execute-api.${{ secrets.AWS_REGION }}.amazonaws.com/prod"
+          echo "📋 Test your API:"
+          echo "   curl https://$API_ID.execute-api.${{ secrets.AWS_REGION }}.amazonaws.com/prod/api/players"
+        fi
