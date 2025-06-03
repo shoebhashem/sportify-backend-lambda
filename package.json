@@ -4,7 +4,10 @@
   "main": "lambda.js",
   "scripts": {
     "start": "node server.js",
-    "seed": "node seed.js"
+    "dev": "NODE_ENV=development node server.js",
+    "seed": "node seed.js",
+    "seed:local": "NODE_ENV=development node -r dotenv/config seed.js dotenv_config_path=.env.local",
+    "test:local": "npm run seed:local && npm run dev"
   },
   "dependencies": {
     "cors": "^2.8.5",

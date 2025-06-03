@@ -9,7 +9,9 @@ const playerSchema = new mongoose.Schema(
     favoriteClub: { type: String },
     favoritePlayer: {type: String},
     clWins: { type: Number, default: 0 },
-    ulWins: { type: Number, default: 0 }
+    ulWins: { type: Number, default: 0 },
+    admin: { type: Boolean, default: false },
+    description: { type: String, default: "" }
   },
   { timestamps: true }
 );

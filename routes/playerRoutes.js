@@ -41,9 +41,9 @@ router.get('/ul', async (req, res) => {
 
 // POST a new player
 router.post('/', async (req, res) => {
-  const { name, birthDate, profilePictureUrl, nationality, favoriteClub, favoritePlayer, clWins, ulWins } = req.body;
+  const { name, birthDate, profilePictureUrl, nationality, favoriteClub, favoritePlayer, clWins, ulWins, admin, description } = req.body;
   try {
-    const player = new Player({ name, birthDate, profilePictureUrl, nationality, favoriteClub, favoritePlayer, clWins, ulWins });
+    const player = new Player({ name, birthDate, profilePictureUrl, nationality, favoriteClub, favoritePlayer, clWins, ulWins, admin, description });
     await player.save();
     version++; // Update version on data change
     res.status(201).json(player);
