@@ -1,7 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-require('dotenv').config();
+
+// Load .env.local in development, .env in production
+const envFile = process.env.NODE_ENV === 'development' ? '.env.local' : '.env';
+require('dotenv').config({ path: envFile });
 
 const app = express();
 
@@ -37,7 +40,9 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Routes
 const playerRoutes = require('./routes/playerRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 app.use('/api/players', playerRoutes);
+app.use('/api/sessions', sessionRoutes);
 
 // Export the app for Lambda (remove app.listen for Lambda)
 module.exports = app;

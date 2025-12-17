@@ -39,6 +39,16 @@ router.get('/ul', async (req, res) => {
   }
 });
 
+// GET players sorted by Total wins (CL wins * 2 + UL wins)
+router.get('/total', async (req, res) => {
+  try {
+    const players = await Player.find().sort({ totWins: -1 });
+    res.json(players);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch total ranking' });
+  }
+});
+
 // POST a new player
 router.post('/', async (req, res) => {
   const { name, birthDate, profilePictureUrl, nationality, favoriteClub, favoritePlayer, clWins, ulWins, admin, description } = req.body;

@@ -1,0 +1,1 @@
+node -e "require('dotenv').config({path: '.env'});const mongoose=require('mongoose');const Player=require('./models/Player');(async()=>{await mongoose.connect(process.env.MONGO_URI);await Player.updateMany({},[{ \$set:{ totWins:{ \$add:[ { \$multiply:['\$clWins',2] }, '\$ulWins' ] } } }]);console.log('Backfill done');process.exit(0);})();"
