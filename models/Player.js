@@ -39,10 +39,13 @@ playerSchema.pre('findOneAndUpdate', async function(next) {
     // Fetch current document to merge existing values with incoming updates
     const current = await this.model.findOne(this.getQuery());
 
-    const clWins =
-      set.clWins ?? update.clWins ?? current?.clWins ?? 0;
-    const ulWins =
-      set.ulWins ?? update.ulWins ?? current?.ulWins ?? 0;
+    // Convert to numbers to prevent string concatenation
+    const clWins = Number(
+      set.clWins ?? update.clWins ?? current?.clWins ?? 0
+    );
+    const ulWins = Number(
+      set.ulWins ?? update.ulWins ?? current?.ulWins ?? 0
+    );
 
     const totWins = (clWins * 2) + ulWins;
 
