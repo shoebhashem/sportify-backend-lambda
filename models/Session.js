@@ -31,9 +31,18 @@ const sessionSchema = new mongoose.Schema(
     numberOfTeams: { type: Number, default: 0 },
     totalAttendees: { type: Number, default: 0 },
     
-    // Match results (for future use)
-    clWinnerTeam: { type: Number, default: null }, // CL winner team number
-    ulWinnerTeam: { type: Number, default: null }  // UL winner team number (optional)
+    // Win reports - tracks which players received CL/EL wins in this session
+    clWinReports: [{
+      playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player' },
+      playerName: { type: String }
+    }],
+    ulWinReports: [{
+      playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player' },
+      playerName: { type: String }
+    }],
+    
+    // Last modified timestamp for tracking edits
+    lastModifiedAt: { type: Date, default: Date.now }
   },
   { timestamps: true }
 );
