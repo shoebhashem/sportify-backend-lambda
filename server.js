@@ -41,8 +41,10 @@ mongoose.connect(process.env.MONGO_URI)
 // Routes
 const playerRoutes = require('./routes/playerRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const pointsHistoryRoutes = require('./routes/pointsHistoryRoutes');
 app.use('/api/players', playerRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/points-history', pointsHistoryRoutes);
 
 // Export the app for Lambda (remove app.listen for Lambda)
 module.exports = app;

@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+// Coerce nullish/empty/non-numeric values to 0 instead of letting them
+// through as null. Number fields cast an empty string ("") to null rather
+// than 0 or a cast error, which previously let corrupted values reach the
+// database and crash $inc-based point awards later.
+const toNumberOrZero = (v) => {
+  const n = Number(v);
+  return v === null || v === undefined || v === '' || Number.isNaN(n) ? 0 : n;
+};
+
 const playerSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -8,10 +17,10 @@ const playerSchema = new mongoose.Schema(
     nationality: { type: String, required: true },
     favoriteClub: { type: String },
     favoritePlayer: {type: String},
-    clWins: { type: Number, default: 0 },
-    ulWins: { type: Number, default: 0 },
-    totWins: { type: Number, default: 0 },
-    sessionsAttended: { type: Number, default: 0 },
+    clWins: { type: Number, default: 0, set: toNumberOrZero },
+    ulWins: { type: Number, default: 0, set: toNumberOrZero },
+    totWins: { type: Number, default: 0, set: toNumberOrZero },
+    sessionsAttended: { type: Number, default: 0, set: toNumberOrZero },
     admin: { type: Boolean, default: false },
     description: { type: String, default: "" }
   },

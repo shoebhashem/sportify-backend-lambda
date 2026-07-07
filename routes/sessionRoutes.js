@@ -2,6 +2,18 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 const Player = require('../models/Player');
+const PointsHistory = require('../models/PointsHistory');
+
+// Mongoose ValidationError/CastError messages are safe, human-readable
+// field/path descriptions (no stack trace) — surface those to the client so
+// failures are diagnosable without server log access. Anything else keeps
+// the generic fallback so we never leak internals.
+const safeErrorMessage = (err, fallback) => {
+  if (err && (err.name === 'ValidationError' || err.name === 'CastError')) {
+    return err.message;
+  }
+  return fallback;
+};
 
 // GET all sessions (sorted by date, newest first)
 router.get('/', async (req, res) => {
@@ -77,7 +89,43 @@ router.patch('/:id', async (req, res) => {
     
     const addedUlWins = newUlWins.filter(id => !previousUlWins.includes(id));
     const removedUlWins = previousUlWins.filter(id => !newUlWins.includes(id));
-    
+
+    // Build Points History entries now, while both the previous (stored) and
+    // new (incoming) win report lists — each carrying {playerId, playerName}
+    // — are available, so a "removed" player still has a name to log even
+    // though they won't be in the new list. Actually inserted only after
+    // session.save() succeeds below, so a failed request never logs history.
+    const clNameById = new Map([
+      ...(session.clWinReports || []).map(w => [w.playerId.toString(), w.playerName]),
+      ...(clWinReports || []).map(w => [w.playerId.toString(), w.playerName]),
+    ]);
+    const ulNameById = new Map([
+      ...(session.ulWinReports || []).map(w => [w.playerId.toString(), w.playerName]),
+      ...(ulWinReports || []).map(w => [w.playerId.toString(), w.playerName]),
+    ]);
+    const winHistoryEntries = [
+      ...addedClWins.map(id => ({ playerId: id, playerName: clNameById.get(id) || 'Unknown', winType: 'CL', delta: 1, source: 'session', sessionId: session._id, sessionName: session.name })),
+      ...removedClWins.map(id => ({ playerId: id, playerName: clNameById.get(id) || 'Unknown', winType: 'CL', delta: -1, source: 'session', sessionId: session._id, sessionName: session.name })),
+      ...addedUlWins.map(id => ({ playerId: id, playerName: ulNameById.get(id) || 'Unknown', winType: 'EL', delta: 1, source: 'session', sessionId: session._id, sessionName: session.name })),
+      ...removedUlWins.map(id => ({ playerId: id, playerName: ulNameById.get(id) || 'Unknown', winType: 'EL', delta: -1, source: 'session', sessionId: session._id, sessionName: session.name })),
+    ];
+
+    // Defensive: normalize any null counters among affected players to 0
+    // before $inc below — MongoDB throws "Cannot apply $inc to a value of
+    // non-numeric type" if the field currently holds null, which would abort
+    // this whole request (and everything after it, including saving the
+    // session's new win reports) partway through.
+    const allAffectedPlayerIds = [...new Set([
+      ...addedParticipants, ...removedParticipants,
+      ...addedClWins, ...removedClWins,
+      ...addedUlWins, ...removedUlWins,
+    ])];
+    if (allAffectedPlayerIds.length > 0) {
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, sessionsAttended: null }, { $set: { sessionsAttended: 0 } });
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, clWins: null }, { $set: { clWins: 0 } });
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, ulWins: null }, { $set: { ulWins: 0 } });
+    }
+
     // Update player attendance counters
     if (addedParticipants.length > 0) {
       await Player.updateMany(
@@ -187,11 +235,15 @@ router.patch('/:id', async (req, res) => {
     session.lastModifiedAt = new Date();
     
     await session.save();
-    
+
+    if (winHistoryEntries.length > 0) {
+      await PointsHistory.insertMany(winHistoryEntries);
+    }
+
     res.json(session);
   } catch (err) {
     console.error('Error updating session:', err);
-    res.status(400).json({ error: 'Failed to update session' });
+    res.status(400).json({ error: safeErrorMessage(err, 'Failed to update session') });
   }
 });
 
@@ -279,9 +331,23 @@ router.delete('/:id', async (req, res) => {
     }
     
     console.log(`🗑️  Deleting session: ${session.name}`);
-    
-    // Decrement sessionsAttended for all participants
+
     const participantIds = session.participants.map(p => p.playerId);
+    const clWinPlayerIds = session.clWinReports ? session.clWinReports.map(w => w.playerId) : [];
+    const ulWinPlayerIds = session.ulWinReports ? session.ulWinReports.map(w => w.playerId) : [];
+
+    // Defensive: normalize any null counters among affected players to 0
+    // before $inc below — see the equivalent comment in PATCH /:id.
+    const allAffectedPlayerIds = [...new Set([
+      ...participantIds, ...clWinPlayerIds, ...ulWinPlayerIds,
+    ].map(id => id.toString()))];
+    if (allAffectedPlayerIds.length > 0) {
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, sessionsAttended: null }, { $set: { sessionsAttended: 0 } });
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, clWins: null }, { $set: { clWins: 0 } });
+      await Player.updateMany({ _id: { $in: allAffectedPlayerIds }, ulWins: null }, { $set: { ulWins: 0 } });
+    }
+
+    // Decrement sessionsAttended for all participants
     if (participantIds.length > 0) {
       await Player.updateMany(
         { _id: { $in: participantIds } },
@@ -289,16 +355,15 @@ router.delete('/:id', async (req, res) => {
       );
       console.log(`✅ Decremented sessionsAttended for ${participantIds.length} participants`);
     }
-    
+
     // Collect all player IDs that need totWins recalculation
     const playerIdsToRecalculate = new Set([
       ...participantIds.map(p => p.toString()),
       ...(session.clWinReports ? session.clWinReports.map(w => w.playerId.toString()) : []),
       ...(session.ulWinReports ? session.ulWinReports.map(w => w.playerId.toString()) : [])
     ]);
-    
+
     // Decrement CL wins for all players in clWinReports
-    const clWinPlayerIds = session.clWinReports ? session.clWinReports.map(w => w.playerId) : [];
     if (clWinPlayerIds.length > 0) {
       await Player.updateMany(
         { _id: { $in: clWinPlayerIds } },
@@ -308,7 +373,6 @@ router.delete('/:id', async (req, res) => {
     }
     
     // Decrement UL wins for all players in ulWinReports
-    const ulWinPlayerIds = session.ulWinReports ? session.ulWinReports.map(w => w.playerId) : [];
     if (ulWinPlayerIds.length > 0) {
       await Player.updateMany(
         { _id: { $in: ulWinPlayerIds } },
@@ -365,8 +429,16 @@ router.delete('/:id', async (req, res) => {
     }
     
     await Session.findByIdAndDelete(req.params.id);
-    
-    res.json({ 
+
+    const deletionHistoryEntries = [
+      ...(session.clWinReports || []).map(w => ({ playerId: w.playerId, playerName: w.playerName, winType: 'CL', delta: -1, source: 'session', sessionId: session._id, sessionName: session.name })),
+      ...(session.ulWinReports || []).map(w => ({ playerId: w.playerId, playerName: w.playerName, winType: 'EL', delta: -1, source: 'session', sessionId: session._id, sessionName: session.name })),
+    ];
+    if (deletionHistoryEntries.length > 0) {
+      await PointsHistory.insertMany(deletionHistoryEntries);
+    }
+
+    res.json({
       message: 'Session deleted successfully',
       affectedPlayers: {
         attendanceDecremented: participantIds.length,
@@ -377,7 +449,7 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('Error deleting session:', err);
-    res.status(500).json({ error: 'Failed to delete session' });
+    res.status(500).json({ error: safeErrorMessage(err, 'Failed to delete session') });
   }
 });
 
