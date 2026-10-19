@@ -69,6 +69,11 @@ jobs:
           --function-name sportify-backend-lambda \
           --zip-file fileb://deployment-package.zip
           
+    - name: Wait for Lambda code update to complete
+      run: |
+        aws lambda wait function-updated \
+          --function-name sportify-backend-lambda
+
     - name: Update Lambda function configuration
       run: |
         aws lambda update-function-configuration \
