@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Player = require('../models/Player');
 const PointsHistory = require('../models/PointsHistory');
+const Session = require('../models/Session');
+
+const MIN_SESSIONS_FOR_RATES = 10;
+const SEASON_START_DATE = new Date('2026-04-22');
 
 let version = 1; // Start with version 1
 
@@ -23,6 +27,61 @@ const sanitizeWinFields = (body) => {
   }
   return body;
 };
+
+// GET stats for a single player (participation rate, CL/EL success rates)
+router.get('/:id/stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: 'Invalid player ID format' });
+    }
+
+    const sessions = await Session.find({ date: { $gte: SEASON_START_DATE } });
+    const totalSessions = sessions.length;
+
+    const attendedSessions = sessions.filter(s =>
+      s.participants.some(p => p.playerId && p.playerId.toString() === id)
+    );
+    const sessionsAttended = attendedSessions.length;
+
+    const participationRate = totalSessions > 0 ? sessionsAttended / totalSessions : 0;
+
+    const clWins = sessions.filter(s =>
+      s.clWinReports.some(r => r.playerId && r.playerId.toString() === id)
+    ).length;
+
+    const clSuccessRate = sessionsAttended >= MIN_SESSIONS_FOR_RATES
+      ? clWins / sessionsAttended
+      : null;
+
+    // EL sessions = sessions where EL was played AND player attended
+    const elSessionsAttended = attendedSessions.filter(s => s.ulWinReports.length > 0).length;
+
+    const elWins = sessions.filter(s =>
+      s.ulWinReports.some(r => r.playerId && r.playerId.toString() === id)
+    ).length;
+
+    const elSuccessRate = sessionsAttended >= MIN_SESSIONS_FOR_RATES && elSessionsAttended > 0
+      ? elWins / elSessionsAttended
+      : null;
+
+    res.json({
+      totalSessions,
+      sessionsAttended,
+      participationRate,
+      clWins,
+      clSuccessRate,
+      elSessionsAttended,
+      elWins,
+      elSuccessRate,
+      minSessionsForRates: MIN_SESSIONS_FOR_RATES,
+      seasonStart: SEASON_START_DATE,
+    });
+  } catch (err) {
+    console.error('Error fetching player stats:', err);
+    res.status(500).json({ error: 'Failed to fetch player stats' });
+  }
+});
 
 // Version endpoint
 router.get('/version', (req, res) => {
